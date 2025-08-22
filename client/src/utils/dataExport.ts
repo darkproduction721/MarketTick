@@ -50,14 +50,50 @@ export const exportToJSON = (data: DepthData[], filename: string = 'market_data.
     return;
   }
 
-  // Format data with readable timestamps
-  const formattedData = data.map(item => ({
-    ...item,
-    timestamp: item.timestamp,
-    datetime: new Date(item.timestamp * 1000).toISOString()
-  }));
+  // Export raw data as received from AllTick API
+  const exportData = {
+    metadata: {
+      exportedAt: new Date().toISOString(),
+      totalRecords: data.length,
+      filename: filename,
+      source: 'AllTick API'
+    },
+    rawData: data // Export the raw data exactly as received from AllTick
+  };
 
-  const jsonContent = JSON.stringify(formattedData, null, 2);
+  const jsonContent = JSON.stringify(exportData, null, 2);
+  
+  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+export const exportRawDataToJSON = (data: any, filename: string = 'raw_market_data.json') => {
+  if (!data) {
+    alert('No raw data available to export');
+    return;
+  }
+
+  // Export the complete raw response from AllTick API
+  const exportData = {
+    metadata: {
+      exportedAt: new Date().toISOString(),
+      filename: filename,
+      source: 'AllTick API - Raw Response',
+      note: 'This is the complete unprocessed response from AllTick API'
+    },
+    rawApiResponse: data // Complete raw API response
+  };
+
+  const jsonContent = JSON.stringify(exportData, null, 2);
   
   const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
   const link = document.createElement('a');

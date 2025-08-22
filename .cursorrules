@@ -1,0 +1,31 @@
+# Cursor Development Rules
+
+## Data Integrity Requirements
+- NEVER use dummy, placeholder, or mock data in development
+- NEVER use bypassing methods, workarounds, or shortcuts that circumvent proper data handling
+- ALWAYS use real, production-like data for all development and testing
+
+## Implementation Standards
+- All database queries must use actual data sources
+- API calls must connect to real endpoints (staging/dev environments with real data)
+- Form submissions and data processing must handle genuine data structures
+- Authentication and authorization must use real user data and permissions
+
+## Prohibited Practices
+- No hardcoded values that simulate real data
+- No skipping validation or security checks
+- No using static responses instead of dynamic data fetching
+- No placeholder content that doesn't reflect actual use cases
+
+## Required Practices
+- Use proper environment variables for different data sources
+- Implement proper error handling for real data scenarios
+- Test with actual data volumes and edge cases
+- Validate data integrity at every step
+- Maintain data consistency across all operations
+
+## Code Quality
+- Write code that works with real data constraints
+- Handle actual data types, formats, and validation rules
+- Account for real-world data variations and edge cases
+- Implement proper data sanitization and security measures

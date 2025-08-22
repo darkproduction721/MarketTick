@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import SymbolSelector from './components/SymbolSelector';
-import DateRangePicker from './components/DateRangePicker';
 import DataPreview from './components/DataPreview';
 import { MarketDataResponse, DepthData } from './types';
-import { exportToCSV, exportToJSON, estimateDataSize } from './utils/dataExport';
+import { exportToCSV, exportToJSON, exportRawDataToJSON, estimateDataSize } from './utils/dataExport';
 import apiService from './services/api';
 import './App.css';
 
@@ -11,15 +10,12 @@ function App() {
   // State management
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
   const [selectedMarket, setSelectedMarket] = useState<string>('stock');
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
   const [marketData, setMarketData] = useState<DepthData[]>([]);
+  const [rawApiResponse, setRawApiResponse] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFetchInfo, setLastFetchInfo] = useState<{
     symbol: string;
-    startDate: string;
-    endDate: string;
     recordCount: number;
   } | null>(null);
 
@@ -32,13 +28,13 @@ function App() {
 
   // Validate form inputs
   const isFormValid = () => {
-    return selectedSymbol && startDate && endDate && startDate <= endDate;
+    return selectedSymbol;
   };
 
   // Fetch market data
   const fetchMarketData = async () => {
     if (!isFormValid()) {
-      setError('Please select a symbol and valid date range');
+      setError('Please select a symbol');
       return;
     }
 
@@ -48,28 +44,27 @@ function App() {
     try {
       const response: MarketDataResponse = await apiService.getMarketData({
         symbol: selectedSymbol,
-        startDate: startDate!.toISOString().split('T')[0],
-        endDate: endDate!.toISOString().split('T')[0],
         market: selectedMarket
       });
 
       if (response.success && response.data) {
         setMarketData(response.data);
+        setRawApiResponse(response); // Store the complete API response for raw download
         setLastFetchInfo({
           symbol: response.symbol,
-          startDate: response.startDate,
-          endDate: response.endDate,
           recordCount: response.totalRecords
         });
         setError(null);
       } else {
         setError('No data received from API');
         setMarketData([]);
+        setRawApiResponse(null);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch market data';
       setError(errorMessage);
       setMarketData([]);
+      setRawApiResponse(null);
       setLastFetchInfo(null);
     } finally {
       setLoading(false);
@@ -78,17 +73,28 @@ function App() {
 
   // Handle data download
   const handleDownload = (format: 'csv' | 'json') => {
-    if (!marketData || marketData.length === 0) {
-      alert('No data available to download');
+    if (format === 'csv' && (!marketData || marketData.length === 0)) {
+      alert('No data available for CSV download');
+      return;
+    }
+    
+    if (format === 'json' && !rawApiResponse && (!marketData || marketData.length === 0)) {
+      alert('No data available for JSON download');
       return;
     }
 
-    const filename = `${selectedSymbol}_${startDate?.toISOString().split('T')[0]}_${endDate?.toISOString().split('T')[0]}_level2.${format}`;
+    const filename = `${selectedSymbol}_level2.${format}`;
     
     if (format === 'csv') {
       exportToCSV(marketData, filename);
     } else {
-      exportToJSON(marketData, filename);
+      // For JSON, download the raw API response data
+      if (rawApiResponse) {
+        exportRawDataToJSON(rawApiResponse, filename);
+      } else {
+        // Fallback to processed data if raw response not available
+        exportToJSON(marketData, filename);
+      }
     }
   };
 
@@ -116,14 +122,6 @@ function App() {
               disabled={loading}
             />
 
-            <DateRangePicker
-              startDate={startDate}
-              endDate={endDate}
-              onStartDateChange={setStartDate}
-              onEndDateChange={setEndDate}
-              disabled={loading}
-            />
-
             <div className="action-buttons">
               <button
                 onClick={fetchMarketData}
@@ -137,18 +135,32 @@ function App() {
             {error && (
               <div className="error-alert">
                 <strong>Error:</strong> {error}
+                {error.includes('rate limit') && (
+                  <div className="rate-limit-help">
+                    <p><strong>Rate Limit Help:</strong></p>
+                    <ul>
+                      <li>AllTick free accounts have strict limits (~20 requests/minute)</li>
+                      <li>Wait 2-3 minutes between requests</li>
+                      <li>Consider upgrading your AllTick API plan for higher limits</li>
+                      <li>Use smaller date ranges to reduce data volume</li>
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {lastFetchInfo && marketData.length > 0 && (
+          {(lastFetchInfo && marketData.length > 0) || (lastFetchInfo && rawApiResponse) ? (
             <div className="download-section">
               <h3>Download Data</h3>
               <div className="download-info">
                 <p><strong>Symbol:</strong> {lastFetchInfo.symbol}</p>
-                <p><strong>Date Range:</strong> {lastFetchInfo.startDate} to {lastFetchInfo.endDate}</p>
                 <p><strong>Records:</strong> {lastFetchInfo.recordCount.toLocaleString()}</p>
                 <p><strong>Estimated Size:</strong> {getEstimatedSize()}</p>
+                <p><strong>Data Status:</strong> 
+                  {marketData.length > 0 ? `${marketData.length} processed records` : 'Raw API data available'}
+                  {rawApiResponse ? ' | Raw response available' : ' | No raw response'}
+                </p>
               </div>
               
               <div className="download-buttons">
@@ -168,7 +180,7 @@ function App() {
                 </button>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
         <DataPreview

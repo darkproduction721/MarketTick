@@ -6,8 +6,6 @@ export interface Symbol {
 
 export interface MarketDataRequest {
   symbol: string;
-  startDate: string;
-  endDate: string;
   market?: string;
 }
 
@@ -22,8 +20,6 @@ export interface MarketDataResponse {
   success: boolean;
   data: DepthData[];
   symbol: string;
-  startDate: string;
-  endDate: string;
   totalRecords: number;
 }
 

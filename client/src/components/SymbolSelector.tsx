@@ -27,9 +27,7 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({
     try {
       setLoading(true);
       setError(null);
-      console.log('Loading symbols...');
       const symbolsData = await apiService.getSymbols();
-      console.log('Symbols loaded:', symbolsData);
       setSymbols(symbolsData);
     } catch (err) {
       console.error('Error loading symbols:', err);

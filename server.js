@@ -27,14 +27,38 @@ const ALLTICK_BASE_URLS = {
   general: 'https://quote.alltick.io/quote-b-api'
 };
 
+// Simple rate limiting tracker
+let lastApiCall = 0;
+const MIN_API_INTERVAL = 10000; // 10 seconds between calls to be safe
+
 // Helper function to format query data for Alltick API
 function formatQuery(symbol, startTime, endTime, market = 'stock') {
-  // AllTick API expects specific format
-  return {
-    code: symbol,
-    begin_time: startTime.toString(),
-    end_time: endTime.toString()
+  // AllTick API expects specific format for real-time data queries
+  // Based on AllTick documentation: https://en.apis.alltick.co/
+  const queryData = {
+    symbol_list: [{ code: symbol }]
   };
+
+  // Only add time parameters if provided (for historical data)
+  if (startTime && endTime) {
+    queryData.start_time = startTime;
+    queryData.end_time = endTime;
+    queryData.limit = 1000;
+  }
+
+  return {
+    data: queryData,
+    trace: generateTraceId()
+  };
+}
+
+// Generate a trace ID for AllTick API requests
+function generateTraceId() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 
@@ -69,16 +93,47 @@ app.get('/api/symbols', async (req, res) => {
     // Fallback to manual list if API doesn't work
     if (symbols.length === 0) {
       symbols = [
-        // Try various formats that might work
+        // Hong Kong Exchange (HKEX) Stocks - Using AllTick format (no leading zeros)
+        { code: '5.HK', name: 'HSBC Holdings', market: 'hkex' },
+        { code: '27.HK', name: 'Galaxy Entertainment Group', market: 'hkex' },
+        { code: '175.HK', name: 'Geely Automobile Holdings', market: 'hkex' },
+        { code: '291.HK', name: 'China Resources Beer Holdings', market: 'hkex' },
+        { code: '386.HK', name: 'Sinopec Corp', market: 'hkex' },
+        { code: '388.HK', name: 'HK Exchanges & Clearing', market: 'hkex' },
+        { code: '700.HK', name: 'Tencent Holdings', market: 'hkex' },
+        { code: '857.HK', name: 'PetroChina', market: 'hkex' },
+        { code: '883.HK', name: 'China National Offshore Oil Corporation', market: 'hkex' },
+        { code: '939.HK', name: 'China Construction Bank', market: 'hkex' },
+        { code: '941.HK', name: 'China Mobile', market: 'hkex' },
+        { code: '998.HK', name: 'CITIC Bank International', market: 'hkex' },
+        { code: '1093.HK', name: 'CSPC Pharmaceutical Group', market: 'hkex' },
+        { code: '1177.HK', name: 'Sino Biopharmaceutical', market: 'hkex' },
+        { code: '1288.HK', name: 'Agricultural Bank of China', market: 'hkex' },
+        { code: '1299.HK', name: 'AIA', market: 'hkex' },
+        { code: '1398.HK', name: 'Industrial and Commercial Bank of China', market: 'hkex' },
+        { code: '1810.HK', name: 'Xiaomi Corp', market: 'hkex' },
+        { code: '1918.HK', name: 'Sunac China Holdings', market: 'hkex' },
+        { code: '2007.HK', name: 'Country Garden Holdings', market: 'hkex' },
+        { code: '2018.HK', name: 'AAC Technologies Holdings', market: 'hkex' },
+        { code: '2318.HK', name: 'Ping An Insurance', market: 'hkex' },
+        { code: '2388.HK', name: 'BOC Hong Kong (Holdings)', market: 'hkex' },
+        { code: '2628.HK', name: 'China Life Insurance Company', market: 'hkex' },
+        { code: '3333.HK', name: 'China Evergrande Group', market: 'hkex' },
+        { code: '3968.HK', name: 'China Merchants Bank', market: 'hkex' },
+        { code: '3988.HK', name: 'Bank of China', market: 'hkex' },
+        
+        // Crypto currencies
         { code: 'BTC-USD', name: 'Bitcoin/USD (Dash)', market: 'crypto' },
         { code: 'BTC/USD', name: 'Bitcoin/USD (Slash)', market: 'crypto' },
         { code: 'BTCUSD', name: 'Bitcoin/USD (Simple)', market: 'crypto' },
         { code: 'BTC_USD', name: 'Bitcoin/USD (Underscore)', market: 'crypto' },
         
+        // Forex
         { code: 'EUR-USD', name: 'EUR/USD (Dash)', market: 'forex' },
         { code: 'EUR/USD', name: 'EUR/USD (Slash)', market: 'forex' },
         { code: 'EURUSD', name: 'EUR/USD (Simple)', market: 'forex' },
         
+        // Commodities
         { code: 'XAUUSD', name: 'Gold/USD', market: 'commodity' },
         { code: 'CRUDE', name: 'Crude Oil', market: 'commodity' }
       ];
@@ -94,53 +149,50 @@ app.get('/api/symbols', async (req, res) => {
 // Get Level 2 market data (depth/order book)
 app.post('/api/market-data', async (req, res) => {
   try {
-    const { symbol, startDate, endDate, market = 'stock' } = req.body;
+    const { symbol, market = 'stock' } = req.body;
     
-    if (!symbol || !startDate || !endDate) {
+    if (!symbol) {
       return res.status(400).json({ 
-        error: 'Missing required parameters: symbol, startDate, endDate' 
+        error: 'Missing required parameter: symbol' 
       });
     }
 
-    // Convert dates to timestamps (Alltick expects Unix timestamps)
-    // ALWAYS use historical dates for testing
-    const now = new Date();
-    const requestStartDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000)); // 7 days ago
-    const requestEndDate = new Date(now.getTime() - (1 * 24 * 60 * 60 * 1000));   // 1 day ago
+    // Use real-time data (no date range needed for real-time quotes)
+    console.log('Fetching real-time data for symbol:', symbol);
     
-    console.log('Using historical dates:');
-    console.log('- Original start:', startDate);
-    console.log('- Original end:', endDate);
-    console.log('- Adjusted start:', requestStartDate.toISOString());
-    console.log('- Adjusted end:', requestEndDate.toISOString());
-    
-    const startTime = Math.floor(requestStartDate.getTime() / 1000);
-    const endTime = Math.floor(requestEndDate.getTime() / 1000);
+    // Use symbol as-is since our symbol list now provides the correct AllTick format
+    let apiSymbol = symbol;
+    console.log('Using symbol:', apiSymbol, 'for market:', market);
     
     // Choose the appropriate base URL based on market type
-    const baseUrl = market === 'stock' ? ALLTICK_BASE_URLS.stock : ALLTICK_BASE_URLS.general;
+    const baseUrl = (market === 'hkex' || market === 'stock') ? ALLTICK_BASE_URLS.stock : ALLTICK_BASE_URLS.general;
     
-    // Prepare the query
-    const query = formatQuery(symbol, startTime, endTime, market);
+    // Prepare the query for real-time data
+    const query = formatQuery(apiSymbol, null, null, market);
     const queryString = JSON.stringify(query);
+    
+    const fullUrl = `${baseUrl}/depth-tick?token=${ALLTICK_API_KEY}&query=${encodeURIComponent(queryString)}`;
     
     console.log('AllTick API Request:');
     console.log('- URL:', `${baseUrl}/depth-tick`);
-    console.log('- Symbol:', symbol);
-    console.log('- Query:', queryString);
-    console.log('- Start Time:', new Date(startTime * 1000).toISOString());
-    console.log('- End Time:', new Date(endTime * 1000).toISOString());
+    console.log('- Symbol:', apiSymbol);
+    console.log('- Market:', market);
+    console.log('- Query Object:', JSON.stringify(query, null, 2));
+    console.log('- Query String:', queryString);
+    console.log('- Full URL:', fullUrl);
     
-    // Add delay to avoid rate limiting
-    console.log('Waiting 3 seconds to avoid rate limit...');
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Add longer delay to avoid rate limiting (AllTick has strict limits)
+    console.log('Waiting 5 seconds to avoid rate limit...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
     
-    // Try different AllTick endpoints based on data availability
+    // Try different AllTick endpoints for historical data
     let response;
     let endpoint = '/depth-tick';
+    let endpointTried = [];
     
     try {
-      // First try depth-tick (Level 2 data)
+      // First try depth-tick (Level 2 real-time/recent data)
+      console.log(`Trying ${endpoint} endpoint...`);
       response = await axios.get(`${baseUrl}${endpoint}`, {
         params: {
           token: ALLTICK_API_KEY,
@@ -148,36 +200,62 @@ app.post('/api/market-data', async (req, res) => {
         },
         timeout: 30000
       });
+      endpointTried.push(endpoint);
     } catch (error) {
-      console.log('depth-tick failed, trying kline endpoint...');
-      // If depth-tick fails, try kline (OHLCV data) as fallback
+      console.log(`${endpoint} failed:`, error.response?.data || error.message);
+      endpointTried.push(`${endpoint} (failed)`);
+      
+      // If depth-tick fails, try kline (OHLCV historical data) as fallback
       endpoint = '/kline';
+      console.log(`Trying ${endpoint} endpoint for historical data...`);
+      
+      // Create kline-specific query
+      const klineQuery = {
+        trace: generateTraceId(),
+        data: {
+          code: apiSymbol,
+          kline_type: 1,          // 1 minute bars
+          kline_timestamp_end: endTime,  // End timestamp
+          query_kline_num: Math.min(1000, Math.floor((endTime - startTime) / 60)), // Number of records
+          adjust_type: 0          // No adjustment
+        }
+      };
+      const klineQueryString = JSON.stringify(klineQuery);
+      
+      console.log('- Kline Query:', JSON.stringify(klineQuery, null, 2));
+      
       response = await axios.get(`${baseUrl}${endpoint}`, {
         params: {
           token: ALLTICK_API_KEY,
-          query: queryString
+          query: klineQueryString
         },
         timeout: 30000
       });
+      endpointTried.push(endpoint);
     }
 
     console.log('AllTick API Response:', response.data);
     
-    if (response.data && response.data.ret === 0) {
+    // AllTick API uses different response codes - 200 means success, not 0
+    if (response.data && (response.data.ret === 0 || response.data.ret === 200)) {
+      console.log(`Success response from AllTick API via ${endpoint}`);
       res.json({
         success: true,
-        data: response.data.data,
+        data: response.data.data || response.data,
         symbol,
-        startDate,
-        endDate,
-        totalRecords: response.data.data ? response.data.data.length : 0
+        totalRecords: response.data.data ? (Array.isArray(response.data.data) ? response.data.data.length : 1) : 0,
+        note: `Data retrieved successfully from AllTick ${endpoint} API`,
+        endpoint: endpoint,
+        endpointsTried: endpointTried,
+        queryType: endpoint === '/kline' ? 'Historical OHLCV' : 'Level 2 Depth'
       });
     } else if (response.data?.ret === 605) {
       // Rate limit hit - return proper error
       console.error('Rate limit exceeded');
       res.status(429).json({
-        error: 'AllTick API rate limit exceeded. Please wait a few minutes and try again.',
+        error: 'AllTick API rate limit exceeded. Please wait 1-2 minutes before trying again. Free accounts have limited requests per minute.',
         apiCode: 605,
+        suggestion: 'Try again in a few minutes, or consider upgrading your AllTick API plan for higher limits.',
         details: response.data
       });
     } else {

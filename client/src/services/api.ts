@@ -3,8 +3,6 @@ import { Symbol, MarketDataRequest, MarketDataResponse, QuoteData } from '../typ
 
 const API_BASE_URL = '/api';
 
-console.log('API Base URL:', API_BASE_URL);
-
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -56,7 +54,14 @@ export const apiService = {
       return response.data;
     } catch (error: any) {
       console.error('Error fetching market data:', error);
-      if (error.response?.data?.error) {
+      
+      // Handle specific error cases
+      if (error.response?.status === 429 || error.response?.data?.apiCode === 605) {
+        // Rate limit error
+        const rateLimitMessage = error.response.data?.error || 
+          'AllTick API rate limit exceeded. Please wait 2-3 minutes before trying again. Free accounts have very limited requests per minute.';
+        throw new Error(rateLimitMessage);
+      } else if (error.response?.data?.error) {
         throw new Error(error.response.data.error);
       }
       throw new Error('Failed to fetch market data');
