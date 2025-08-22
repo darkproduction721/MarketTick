@@ -1,12 +1,16 @@
-# MarketTick - Real-Time Level 2 Data Viewer
+# MarketTick - Real-Time Level 2 Data Collector
 
-A web application for fetching and viewing real-time Level 2 market data from AllTick.co API. The app provides a simple interface to select symbols, view raw API responses, and download data in CSV or JSON format.
+A web application for fetching, collecting, and building historical Level 2 market data from AllTick.co API. The app provides automated data collection during Hong Kong market hours, helping you build your own historical tick database minute-by-minute. Features both manual data fetching and automated collection with market hours detection.
 
 ## Features
 
-- 🔍 **Symbol Selection**: Choose from available Hong Kong Exchange (HKEX) stocks
+- 🔍 **Symbol Selection**: Choose from available stocks and crypto currencies
+- 🤖 **Automated Data Collection**: Set-and-forget collection during market hours (24/7 for crypto)
+- 📚 **Historical Data Building**: Automatically save minute-by-minute JSON files to build your own historical database
+- ⏰ **Market Hours Detection**: Smart scheduling for stock markets (9:30-12:00, 13:00-16:00 HKT) and 24/7 crypto
 - 📊 **Raw Data Preview**: View complete unprocessed API responses 
 - 💾 **Multiple Export Formats**: Download data as CSV or JSON
+- 📈 **Collection Statistics**: Track success rates and monitor collection performance
 - 📱 **Responsive Design**: Works on desktop and mobile devices
 - ⚡ **Real-time Data**: Fetches current Level 2 market data
 - 🚫 **No Mock Data**: Enforced real data policy with .cursorrules
@@ -95,20 +99,46 @@ The application uses the AllTick.co API to fetch real-time Level 2 market data. 
 
 ## Usage
 
+### Manual Data Fetching
 1. **Select a Symbol**: Choose from available HKEX stocks (e.g., Tencent 700.HK)
-2. **Fetch Data**: Click "Fetch Data" to retrieve real-time market data
+2. **Fetch Data**: Click "Fetch Data (One-time)" to retrieve real-time market data
 3. **View Raw Response**: Review the complete API response in JSON format
 4. **Download**: Choose CSV or JSON format to download the data
 
+### Automated Data Collection
+1. **Select a Symbol**: Choose the stock symbol you want to collect data for
+2. **Enable Auto-start**: Check "Auto-start during market hours" to automatically begin/end collection
+3. **Start Collection**: Click "Start Collection" to begin minute-by-minute data collection
+4. **Monitor Progress**: View real-time statistics including success rate and collection status
+5. **Historical Data**: Files are automatically saved to your Downloads folder with timestamps
+
+#### File Naming Convention
+Automated collection saves files as: `{SYMBOL}_{TIMESTAMP}_tick.json`
+
+Example: `700.HK_2024-01-15T09-31-00_tick.json`
+
+#### Market Hours
+- **Stock Markets**: 9:30 AM - 12:00 PM HKT (morning), 1:00 PM - 4:00 PM HKT (afternoon)
+- **Crypto Markets**: 24/7 availability
+- **Weekend**: Stock markets closed, crypto continues
+- **Auto-collection**: Automatically starts/stops based on market hours when enabled
+
 ## Supported Symbols
 
-The application includes popular Hong Kong Exchange stocks:
+### Hong Kong Exchange Stocks
 - **700.HK** - Tencent Holdings
 - **5.HK** - HSBC Holdings  
 - **388.HK** - HK Exchanges & Clearing
 - **941.HK** - China Mobile
 - **175.HK** - Geely Automobile Holdings
 - And many more...
+
+### Crypto Currencies
+- **BTCUSDT** - Bitcoin/USDT
+- **ETHUSDT** - Ethereum/USDT  
+- **BNBUSDT** - BNB/USDT
+- **ADAUSDT** - Cardano/USDT
+- And more popular trading pairs...
 
 ## Data Format
 
@@ -190,6 +220,7 @@ The application includes comprehensive error handling for:
 MarketTick/
 ├── server.js              # Express backend server
 ├── package.json           # Backend dependencies
+├── nodemon.json           # Development server configuration
 ├── .env                   # Environment configuration
 ├── .cursorrules          # Development rules
 └── client/               # React frontend
@@ -197,7 +228,8 @@ MarketTick/
     │   ├── App.tsx           # Main application
     │   ├── components/       # React components
     │   │   ├── SymbolSelector.tsx
-    │   │   └── DataPreview.tsx
+    │   │   ├── DataPreview.tsx
+    │   │   └── AutoDataCollector.tsx  # Automated collection
     │   ├── services/         # API services
     │   ├── types/           # TypeScript definitions
     │   └── utils/           # Export utilities
@@ -233,13 +265,15 @@ For issues related to:
 
 ## Changelog
 
-### v2.0.0 (Current Release)
-- ✅ Simplified to real-time data only (removed date range selection)
-- ✅ Raw API response display
-- ✅ Improved error handling and rate limiting
-- ✅ Updated to AllTick API best practices
-- ✅ Hong Kong Exchange (HKEX) symbol support
-- ✅ Enforced real data policy with .cursorrules
+### v2.1.0 (Current Release)
+- ✅ **Automated Data Collection**: Set-and-forget collection during market hours
+- ✅ **Historical Data Building**: Minute-by-minute data collection to build your own database
+- ✅ **Market Hours Detection**: Smart scheduling for stock markets and 24/7 crypto
+- ✅ **High-Capacity Local Storage**: Store up to 10,000 records per symbol
+- ✅ **Smart Bulk Export**: Optimized downloads with automatic chunking for large files
+- ✅ **Collection Statistics**: Real-time monitoring of success rates and storage health
+- ✅ **Enhanced Symbol Support**: HKEX stocks and crypto currencies
+- ✅ **Improved Error Handling**: Comprehensive rate limiting and API error management
 
 ### v1.0.0 (Previous Release)
 - Symbol selection with search functionality

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import SymbolSelector from './components/SymbolSelector';
 import DataPreview from './components/DataPreview';
+import AutoDataCollector from './components/AutoDataCollector';
 import { MarketDataResponse, DepthData } from './types';
 import { exportToCSV, exportToJSON, exportRawDataToJSON, estimateDataSize } from './utils/dataExport';
 import apiService from './services/api';
@@ -107,8 +108,8 @@ function App() {
   return (
     <div className="App">
       <header className="app-header">
-        <h1>MarketTick - Level 2 Data Downloader</h1>
-        <p>Download historical Level 2 market data from AllTick.co</p>
+        <h1>MarketTick - Level 2 Data Collector</h1>
+        <p>Real-time Level 2 market data collection for stocks and crypto from AllTick.co</p>
       </header>
 
       <main className="app-main">
@@ -128,7 +129,7 @@ function App() {
                 disabled={!isFormValid() || loading}
                 className="fetch-button primary-button"
               >
-                {loading ? 'Fetching Data...' : 'Fetch Data'}
+                {loading ? 'Fetching Data...' : 'Fetch Data (One-time)'}
               </button>
             </div>
 
@@ -182,6 +183,12 @@ function App() {
             </div>
           ) : null}
         </div>
+
+        <AutoDataCollector
+          selectedSymbol={selectedSymbol}
+          selectedMarket={selectedMarket}
+          disabled={loading}
+        />
 
         <DataPreview
           data={marketData}

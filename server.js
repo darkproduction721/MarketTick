@@ -29,7 +29,7 @@ const ALLTICK_BASE_URLS = {
 
 // Simple rate limiting tracker
 let lastApiCall = 0;
-const MIN_API_INTERVAL = 10000; // 10 seconds between calls to be safe
+const MIN_API_INTERVAL = 15000; // 15 seconds between calls to be more conservative
 
 // Helper function to format query data for Alltick API
 function formatQuery(symbol, startTime, endTime, market = 'stock') {
@@ -122,11 +122,11 @@ app.get('/api/symbols', async (req, res) => {
         { code: '3968.HK', name: 'China Merchants Bank', market: 'hkex' },
         { code: '3988.HK', name: 'Bank of China', market: 'hkex' },
         
-        // Crypto currencies
-        { code: 'BTC-USD', name: 'Bitcoin/USD (Dash)', market: 'crypto' },
-        { code: 'BTC/USD', name: 'Bitcoin/USD (Slash)', market: 'crypto' },
-        { code: 'BTCUSD', name: 'Bitcoin/USD (Simple)', market: 'crypto' },
-        { code: 'BTC_USD', name: 'Bitcoin/USD (Underscore)', market: 'crypto' },
+        // Crypto currencies - Using AllTick compatible format
+        { code: 'BTCUSDT', name: 'Bitcoin/USDT', market: 'crypto' },
+        { code: 'ETHUSDT', name: 'Ethereum/USDT', market: 'crypto' },
+        { code: 'BNBUSDT', name: 'BNB/USDT', market: 'crypto' },
+        { code: 'ADAUSDT', name: 'Cardano/USDT', market: 'crypto' },
         
         // Forex
         { code: 'EUR-USD', name: 'EUR/USD (Dash)', market: 'forex' },
@@ -157,6 +157,12 @@ app.post('/api/market-data', async (req, res) => {
       });
     }
 
+    if (!ALLTICK_API_KEY) {
+      return res.status(500).json({ 
+        error: 'AllTick API key not configured. Please set ALLTICK_API_KEY environment variable.' 
+      });
+    }
+
     // Use real-time data (no date range needed for real-time quotes)
     console.log('Fetching real-time data for symbol:', symbol);
     
@@ -181,9 +187,9 @@ app.post('/api/market-data', async (req, res) => {
     console.log('- Query String:', queryString);
     console.log('- Full URL:', fullUrl);
     
-    // Add longer delay to avoid rate limiting (AllTick has strict limits)
-    console.log('Waiting 5 seconds to avoid rate limit...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Add delay to avoid rate limiting (AllTick has strict limits)
+    console.log('Waiting 10 seconds to avoid rate limit...');
+    await new Promise(resolve => setTimeout(resolve, 10000));
     
     // Try different AllTick endpoints for historical data
     let response;
@@ -209,14 +215,17 @@ app.post('/api/market-data', async (req, res) => {
       endpoint = '/kline';
       console.log(`Trying ${endpoint} endpoint for historical data...`);
       
-      // Create kline-specific query
+      // Create kline-specific query for recent data
+      const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
+      const oneHourAgo = now - (60 * 60); // 1 hour ago
+      
       const klineQuery = {
         trace: generateTraceId(),
         data: {
           code: apiSymbol,
           kline_type: 1,          // 1 minute bars
-          kline_timestamp_end: endTime,  // End timestamp
-          query_kline_num: Math.min(1000, Math.floor((endTime - startTime) / 60)), // Number of records
+          kline_timestamp_end: now,  // Current timestamp
+          query_kline_num: 60,    // Last 60 minutes of data
           adjust_type: 0          // No adjustment
         }
       };
@@ -251,11 +260,23 @@ app.post('/api/market-data', async (req, res) => {
       });
     } else if (response.data?.ret === 605) {
       // Rate limit hit - return proper error
-      console.error('Rate limit exceeded');
+      console.error('Rate limit exceeded - API returned 605');
       res.status(429).json({
-        error: 'AllTick API rate limit exceeded. Please wait 1-2 minutes before trying again. Free accounts have limited requests per minute.',
+        error: 'AllTick API rate limit exceeded. Free accounts are limited to ~20 requests per minute. Please wait 2-3 minutes before trying again.',
         apiCode: 605,
-        suggestion: 'Try again in a few minutes, or consider upgrading your AllTick API plan for higher limits.',
+        retryAfter: 180, // seconds
+        msg: response.data?.msg || 'too many requests',
+        suggestion: 'Consider upgrading your AllTick plan for higher rate limits, or reduce the frequency of requests.',
+        details: response.data
+      });
+    } else if (response.data?.ret === 600) {
+      // Invalid symbol code
+      console.error('Invalid symbol code - API returned 600');
+      res.status(400).json({
+        error: `Invalid symbol code: "${apiSymbol}". Please check if this symbol is supported by AllTick API.`,
+        apiCode: 600,
+        msg: response.data?.msg || 'code invalid',
+        suggestion: 'Try using different symbol formats or check AllTick documentation for supported symbols.',
         details: response.data
       });
     } else {
@@ -269,16 +290,31 @@ app.post('/api/market-data', async (req, res) => {
     
   } catch (error) {
     console.error('Error fetching market data:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+      status: error.response?.status
+    });
     
     if (error.code === 'ECONNABORTED') {
       res.status(408).json({ error: 'Request timeout - please try a smaller date range' });
     } else if (error.response) {
       res.status(error.response.status).json({ 
-        error: 'API request failed', 
-        details: error.response.data 
+        error: `API request failed: ${error.response.status} ${error.response.statusText}`, 
+        details: error.response.data,
+        message: error.message
+      });
+    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      res.status(503).json({ 
+        error: 'Unable to connect to AllTick API. Please check your internet connection.',
+        code: error.code
       });
     } else {
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ 
+        error: `Internal server error: ${error.message}`,
+        code: error.code || 'UNKNOWN'
+      });
     }
   }
 });
@@ -343,4 +379,14 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
   console.log(`API Key configured: ${ALLTICK_API_KEY ? 'Yes' : 'No'}`);
+  
+  if (!ALLTICK_API_KEY) {
+    console.log('\n⚠️  WARNING: AllTick API key is not configured!');
+    console.log('📋 To fix this:');
+    console.log('   1. Get an API key from https://alltick.co/');
+    console.log('   2. Set environment variable: export ALLTICK_API_KEY=your_key_here');
+    console.log('   3. Or create a .env file with: ALLTICK_API_KEY=your_key_here\n');
+  } else {
+    console.log('✅ AllTick API integration ready!');
+  }
 });
